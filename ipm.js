@@ -135,13 +135,10 @@ async function replaceEsmSyntax (content, metadata) {
   if (_imports.length === 0) return content;
   // 
   const promises = _imports.map(i => resolve(new Metadata(i.url, i)));
-  const dependencies = (await Promise.all(promises)).map(pe => pe[0]);
+  const deps = (await Promise.all(promises)).map(pe => pe[0]);
   _imports.forEach(i => replaceImport(i, content, code));
-  return dependencies.reduce(
-    (p, d) => content.replace(d.metadata.import.raw, moduleFunction(d), d.metadata) // replaceEsmSyntax(c.rawContent, c.metadata)),
-  ,'');
-  // const exportedValue =  interpretContent(content);
-  // const code =  objectToCode(content, metadata); // wrapDependency()
+  // recursive call replaceEsmSyntax(c.rawContent, c.metadata))
+  return deps.reduce((p, d) => content.replace(d.metadata.import.raw, moduleFunction(d), d.metadata),'');
 }
 /**
  * Split the given url into its parts.
@@ -254,7 +251,7 @@ async function fetchDependency (metadata) {
  * @returns {Object} The return description.
  */
 function compatibility (metadata, tree) {
-  // if (tree.dependencies.fin())
+  // if (tree.dep.fin())
 }
 /**
  * Summary.
@@ -280,12 +277,11 @@ async function resolve (metadata, tree) {
  * @param {string} paramName - Param description (e.g. "add", "edit").
  * @returns {Object} The return description.
  */
-function Import (url, tree) {
-  const [protocol, author, lib, version, hash] = decode(url);
-  const metadata = new Dependency.Metadata(protocol, author, lib, version, hash);
-  const [dependency, conflicts] = resolve(metadata, tree);
+async function Import (url, tree) {
+  const metadata = new Metadata(url);
+  const [dependency, conflicts] = await resolve(metadata, tree);
   if (conflicts.length > 0) return resolveConflictsManually(conflicts);
-  return success();
+  return dependency;
 }
 /**
  * Summary.
@@ -353,3 +349,4 @@ const ipm = {
 }
 
 const code = compile(process.argv[2]);
+code.then(console.log);
