@@ -91,6 +91,60 @@ function importMetadata (importString) {
  * @param {string} url      - The url to deconstruct.
  * @returns {array<string>} - The array of the url pieces.
  */
+function moduleName (metadata) {
+  return [metadata.author, metadata.name, metadata.version.replace(/\./g, '_')].join('_');
+}
+// 'const ' + c.metadata.name + ' = {\n' + c.rawContent.replace(/export \{(\S|\s)*\};/g, '')) + '\n};' // replaceEsmSyntax(c.rawContent, c.metadata)),
+/**
+ * Split the given url into its parts.
+ *
+ * @throws {Exception}
+ * @param {string} url      - The url to deconstruct.
+ * @returns {array<string>} - The array of the url pieces.
+ */
+function wrapModule (content, metadata) {
+  const moduleName = [metadata.author, metadata.name, metadata.version.replace(/\./g, '_')].join('_');
+  return `const ${moduleName} = {\n${content}\n};`
+    + `\nconst ${metadata.import.alias} = ${moduleName}.${metadata.name};\n`;
+}
+/**
+ * Split the given url into its parts.
+ *
+ * @throws {Exception}
+ * @param {string} url      - The url to deconstruct.
+ * @returns {array<string>} - The array of the url pieces.
+ */
+function exportedObjects (dependency) {
+  // var _exports = dependency.rawContent.match(/export.*\{.*(\w).*\};/g)[0];
+  // _exports = _exports.replace(/(export.*\{)/g, '').replace(/\};/g, '').replace(/\s/g, '');
+  // var names = _exports.split(',')
+  // console.log(names);
+  // const names = dependency.rawContent.replace(/export \{(\S|\s)*\};/g, '');
+  const name = moduleName(dependency.metadata);
+  var code = dependency.rawContent.replace(/export/g, 'const ' + name + ' = ')
+    + `\nvar MODULE_${name} = function () { return ${name}; }\n`
+  // eval(code)
+  // console.log(MODULE_DiegoMeza_JsonToXml_1_0_0());
+  return code;
+}
+/**
+ * Split the given url into its parts.
+ *
+ * @throws {Exception}
+ * @param {string} url      - The url to deconstruct.
+ * @returns {array<string>} - The array of the url pieces.
+ */
+function removeEsmSyntax (dependency) {
+  return exportedObjects(dependency);
+  // return dependency.rawContent.replace(/export \{(\S|\s)*\};/g, '');
+}
+/**
+ * Split the given url into its parts.
+ *
+ * @throws {Exception}
+ * @param {string} url      - The url to deconstruct.
+ * @returns {array<string>} - The array of the url pieces.
+ */
 async function replaceEsmSyntax (content, metadata) {
   const _imports = imports(content).map(importMetadata);
   // if the file doesent have a dependency is a leaf
@@ -101,7 +155,7 @@ async function replaceEsmSyntax (content, metadata) {
   const dependencies = (await Promise.all(promises)).map(pe => pe[0]);
   _imports.forEach(i => replaceImport(i, content, code));
   return dependencies.reduce(
-    (p, c) => content.replace(c.metadata.import.raw, c.rawContent.replace(/export \{(\S|\s)*\};/g, '')) // replaceEsmSyntax(c.rawContent, c.metadata)),
+    (p, d) => content.replace(d.metadata.import.raw, removeEsmSyntax(d), d.metadata) // replaceEsmSyntax(c.rawContent, c.metadata)),
   ,'');
   // const exportedValue =  interpretContent(content);
   // const code =  objectToCode(content, metadata); // wrapDependency()
@@ -118,7 +172,8 @@ async function compile (fileName) {
   if (error) return resolveConflictsManually(e);
   var code = content.toString();
   code = await replaceEsmSyntax(code);
-  eval(code); // excec the dependency free code
+  console.log(code);
+  // eval(code); // excec the dependency free code
   return code;
 }
 /**
@@ -277,6 +332,7 @@ function Metadata (url, _import) {
   this.protocol = protocol;
   this.author = author;
   this.lib = lib;
+  this.name = lib;
   this.version = version;
   this.hash = hash;
   this.import = _import;
