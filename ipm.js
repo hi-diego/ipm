@@ -92,7 +92,6 @@ function importMetadata (importString) {
  * @returns {array<string>} - The array of the url pieces.
  */
 async function replaceEsmSyntax (content, metadata) {
-  // console.log('-'.repeat(30));
   const _imports = imports(content).map(importMetadata);
   // if the file doesent have a dependency is a leaf
   // in the dependency tree so we can load it safely.
@@ -105,7 +104,6 @@ async function replaceEsmSyntax (content, metadata) {
     (p, c) => content.replace(c.metadata.import.raw, c.rawContent.replace(/export \{(\S|\s)*\};/g, '')) // replaceEsmSyntax(c.rawContent, c.metadata)),
   ,'');
   // const exportedValue =  interpretContent(content);
-  // console.log(exportedValue);
   // const code =  objectToCode(content, metadata); // wrapDependency()
 }
 /**
@@ -120,7 +118,7 @@ async function compile (fileName) {
   if (error) return resolveConflictsManually(e);
   var code = content.toString();
   code = await replaceEsmSyntax(code);
-  console.log(code);
+  eval(code); // excec the dependency free code
   return code;
 }
 /**
@@ -144,7 +142,6 @@ function decode (url) {
  */
 async function IPromise (promise) {
   // return ITry(async () => await promise);
-  // console.log(await promise);
   try {
     return [await promise, null];
   } catch (e) {
@@ -233,8 +230,6 @@ function compatibility (metadata, tree) {
  */
 async function resolve (metadata, tree) {
   const dependency = null; // tree.search(metadata);
-  // console.log(metadata);
-  // console.log(fetchDependency(metadata));
   if (!dependency) return [new Dependency(metadata, await fetchDependency(metadata)), []];
   // const conflicts = tree.compatibility(dependency);
   return [dependency, conflicts];
