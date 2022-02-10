@@ -94,7 +94,6 @@ function importMetadata (importString) {
 function moduleName (metadata) {
   return [metadata.author, metadata.name, metadata.version.replace(/\./g, '_')].join('_');
 }
-// 'const ' + c.metadata.name + ' = {\n' + c.rawContent.replace(/export \{(\S|\s)*\};/g, '')) + '\n};' // replaceEsmSyntax(c.rawContent, c.metadata)),
 /**
  * Split the given url into its parts.
  *
@@ -114,31 +113,13 @@ function wrapModule (content, metadata) {
  * @param {string} url      - The url to deconstruct.
  * @returns {array<string>} - The array of the url pieces.
  */
-function exportedObjects (dependency) {
-  // var _exports = dependency.rawContent.match(/export.*\{.*(\w).*\};/g)[0];
-  // _exports = _exports.replace(/(export.*\{)/g, '').replace(/\};/g, '').replace(/\s/g, '');
-  // var names = _exports.split(',')
-  // console.log(names);
-  // const names = dependency.rawContent.replace(/export \{(\S|\s)*\};/g, '');
+function moduleFunction (dependency) {
   const name = moduleName(dependency.metadata);
   const content = dependency.rawContent.replace(/export/g, 'const ' + name + ' = ');
   var code = `const MODULE_${name} = function () {\n${ content.split('\n').join('\r\n  ') }\nreturn ${name};\n}\n`
     + `const ${name} = MODULE_${name}();\n`
     + `const ${dependency.metadata.import.alias} = ${name}.${dependency.metadata.import.alias};`;
-  // eval(code);
-  // console.log(MODULE_DiegoMeza_JsonToXml_1_0_0());
   return code;
-}
-/**
- * Split the given url into its parts.
- *
- * @throws {Exception}
- * @param {string} url      - The url to deconstruct.
- * @returns {array<string>} - The array of the url pieces.
- */
-function removeEsmSyntax (dependency) {
-  return exportedObjects(dependency);
-  // return dependency.rawContent.replace(/export \{(\S|\s)*\};/g, '');
 }
 /**
  * Split the given url into its parts.
@@ -157,7 +138,7 @@ async function replaceEsmSyntax (content, metadata) {
   const dependencies = (await Promise.all(promises)).map(pe => pe[0]);
   _imports.forEach(i => replaceImport(i, content, code));
   return dependencies.reduce(
-    (p, d) => content.replace(d.metadata.import.raw, removeEsmSyntax(d), d.metadata) // replaceEsmSyntax(c.rawContent, c.metadata)),
+    (p, d) => content.replace(d.metadata.import.raw, moduleFunction(d), d.metadata) // replaceEsmSyntax(c.rawContent, c.metadata)),
   ,'');
   // const exportedValue =  interpretContent(content);
   // const code =  objectToCode(content, metadata); // wrapDependency()
@@ -174,7 +155,6 @@ async function compile (fileName) {
   if (error) return resolveConflictsManually(e);
   var code = content.toString();
   code = await replaceEsmSyntax(code);
-  console.log(code);
   eval(code); // excec the dependency free code
   return code;
 }
@@ -286,9 +266,9 @@ function compatibility (metadata, tree) {
  * @returns {Object} The return description.
  */
 async function resolve (metadata, tree) {
-  const dependency = null; // tree.search(metadata);
+  const dependency = tree.search(metadata);
   if (!dependency) return [new Dependency(metadata, await fetchDependency(metadata)), []];
-  // const conflicts = tree.compatibility(dependency);
+  const conflicts = tree.compatibility(dependency);
   return [dependency, conflicts];
 }
 /**
