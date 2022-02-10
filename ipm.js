@@ -76,12 +76,13 @@ function imports(code) {
  * @returns {array<string>} - The array of the url pieces.
  */
 function importMetadata (importString) {
+  const raw = importString;
   const pieces = importString.split(' ')
   const expression = importString.match(/\{(\s*(\w+)\s*)*\}/g)[0].replace(/(\{\s*|\s*\})/g, '');
   const alias = expression.split(' as ')[0];
   const name = expression.split(' as ')[1] || alias;
   const url = pieces.pop();
-  return { name, alias, url };
+  return { name, alias, url, raw };
 }
 /**
  * Split the given url into its parts.
@@ -90,15 +91,22 @@ function importMetadata (importString) {
  * @param {string} url      - The url to deconstruct.
  * @returns {array<string>} - The array of the url pieces.
  */
-function replaceEsmSyntax (content, metadata) {
+async function replaceEsmSyntax (content, metadata) {
+  // console.log('-'.repeat(30));
   const _imports = imports(content).map(importMetadata);
   // if the file doesent have a dependency is a leaf
   // in the dependency tree so we can load it safely.
-  if (imports.length > 0) return _imports.map(i => resolve(new Metadata(i.url, i)));
+  if (_imports.length === 0) return content;
+  // 
+  const promises = _imports.map(i => resolve(new Metadata(i.url, i)));
+  const dependencies = (await Promise.all(promises)).map(pe => pe[0]);
+  _imports.forEach(i => replaceImport(i, content, code));
+  return dependencies.reduce(
+    (p, c) => content.replace(c.metadata.import.raw, c.rawContent.replace(/export \{(\S|\s)*\};/g, '')) // replaceEsmSyntax(c.rawContent, c.metadata)),
+  ,'');
   // const exportedValue =  interpretContent(content);
+  // console.log(exportedValue);
   // const code =  objectToCode(content, metadata); // wrapDependency()
-  // imports.forEach(i => replaceImport(i, content, code));
-  // return content;
 }
 /**
  * Split the given url into its parts.
@@ -111,7 +119,9 @@ async function compile (fileName) {
   var [content, error] = await IPromise(fs.readFile(fileName));
   if (error) return resolveConflictsManually(e);
   var code = content.toString();
-  code = replaceEsmSyntax(code);
+  code = await replaceEsmSyntax(code);
+  console.log(code);
+  return code;
 }
 /**
  * Split the given url into its parts.
@@ -221,11 +231,11 @@ function compatibility (metadata, tree) {
  * @param {string} paramName - Param description (e.g. "add", "edit").
  * @returns {Object} The return description.
  */
-function resolve (metadata, tree) {
+async function resolve (metadata, tree) {
   const dependency = null; // tree.search(metadata);
   // console.log(metadata);
   // console.log(fetchDependency(metadata));
-  if (!dependency) return [fetchDependency(metadata), []];
+  if (!dependency) return [new Dependency(metadata, await fetchDependency(metadata)), []];
   // const conflicts = tree.compatibility(dependency);
   return [dependency, conflicts];
 }
@@ -286,9 +296,11 @@ function Metadata (url, _import) {
  * @param {string} paramName - Param description (e.g. "add", "edit").
  * @returns {Object} The return description.
  */
-function Dependency (metadata) {
- this.metadata = metadata
- this.fetch = fetch.bind(null, [this]);
+function Dependency (metadata, rawContent) {
+  this.metadata = metadata
+  // this.fetch = fetch.bind(null, [this]);
+  this.rawContent = rawContent;
+  return this;
 }
 /**
  * Summary.
@@ -307,4 +319,4 @@ const ipm = {
   Import: Import
 }
 
-compile(process.argv[2]);
+const code = compile(process.argv[2]);
