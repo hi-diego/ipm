@@ -1,4 +1,4 @@
-var http = require('http');
+var https = require('https');
 var fs = require('fs/promises');
 /**
  * Split the given url into its parts.
@@ -35,6 +35,55 @@ function interpretContent (content) {
   return exportValue;
 }
 /**
+ * Summary.
+ *
+ * Description.
+ *
+ * @throws {Exception}
+ * @param {string} paramName - Param description (e.g. "add", "edit").
+ * @returns {Object} The return description.
+ */
+function isImports(codeLine) {
+  return codeLine.startsWith('import ');
+}
+/**
+ * Summary.
+ *
+ * Description.
+ *
+ * @throws {Exception}
+ * @param {string} paramName - Param description (e.g. "add", "edit").
+ * @returns {Object} The return description.
+ */
+function imports(code) {
+  const lines = code.split('\n');
+  var i = 0;
+  const imports = [];
+  var line = lines[i];
+  if (!isImports(line)) return [];
+  while (isImports(line)) {
+    imports.push(line);
+    i++;
+    line = lines[i];
+  }
+  return imports;
+}
+/**
+ * Split the given url into its parts.
+ *
+ * @throws {Exception}
+ * @param {string} url      - The url to deconstruct.
+ * @returns {array<string>} - The array of the url pieces.
+ */
+function importMetadata (importString) {
+  const pieces = importString.split(' ')
+  const expression = importString.match(/\{(\s*(\w+)\s*)*\}/g)[0].replace(/(\{\s*|\s*\})/g, '');
+  const alias = expression.split(' as ')[0];
+  const name = expression.split(' as ')[1] || alias;
+  const url = pieces.pop();
+  return { name, alias, url };
+}
+/**
  * Split the given url into its parts.
  *
  * @throws {Exception}
@@ -42,14 +91,14 @@ function interpretContent (content) {
  * @returns {array<string>} - The array of the url pieces.
  */
 function replaceEsmSyntax (content, metadata) {
-  const imports = imports(content);
+  const _imports = imports(content).map(importMetadata);
   // if the file doesent have a dependency is a leaf
   // in the dependency tree so we can load it safely.
-  if (imports.length > 0) return;
-  const exportedValue =  interpretContent(content);
-  const code =  objectToCode(content, metadata); // wrapDependency()
-  imports.forEach(i => replaceImport(i, content, code));
-  return content;
+  if (imports.length > 0) return _imports.map(i => resolve(new Metadata(i.url, i)));
+  // const exportedValue =  interpretContent(content);
+  // const code =  objectToCode(content, metadata); // wrapDependency()
+  // imports.forEach(i => replaceImport(i, content, code));
+  // return content;
 }
 /**
  * Split the given url into its parts.
@@ -60,9 +109,9 @@ function replaceEsmSyntax (content, metadata) {
  */
 async function compile (fileName) {
   var [content, error] = await IPromise(fs.readFile(fileName));
-  console.log(content.toString());
-  // if (error) return resolveConflictsManually(e);
-  // content = replaceEsmSyntax(content);
+  if (error) return resolveConflictsManually(e);
+  var code = content.toString();
+  code = replaceEsmSyntax(code);
 }
 /**
  * Split the given url into its parts.
@@ -73,7 +122,7 @@ async function compile (fileName) {
  */
 function decode (url) {
   const pieces = url.split('/');
-  return [pieces[0], pieces[1], pieces[2], pieces[3], pieces[4]];
+  return [pieces[0], pieces[1], pieces[2], pieces[3], pieces[4].replace('\';', '')];
 }
 /**
  * Sugar syntax for async await promises
@@ -85,6 +134,7 @@ function decode (url) {
  */
 async function IPromise (promise) {
   // return ITry(async () => await promise);
+  // console.log(await promise);
   try {
     return [await promise, null];
   } catch (e) {
@@ -115,17 +165,25 @@ function ITry (action) {
  * @param {string} paramName - Param description (e.g. "add", "edit").
  * @returns {Object} The return description.
  */
-async function fetch (url, options = {}) {
-  return await IPromise(new Promise((res, rej) => {
-    var data = '';
-    http.get(url, options, response => {
-      if (statusCode !== 200) rej(err);
-      // A chunk of data has been received.
-      resp.on('data', (chunk) => (data += chunk));
-      // The whole response has been received. Print out the result.
-      resp.on('end', () => res(data));
-    }).catch(e => rej(e));
-  }).catch(e => rej(r)));
+function fetch (url) {
+  return new Promise((res, rej) => {
+    https.get(url, r => {
+      if (r.statusCode !== 200) return rej(new Error(`Request Failed. Status Code: ${r.statusCode}`));
+      r.on('data', d => res(d.toString()));
+    }).on('error', e => rej(e));
+  });
+}
+/**
+ * Summary.
+ *
+ * Description.
+ *
+ * @throws {Exception}
+ * @param {string} paramName - Param description (e.g. "add", "edit").
+ * @returns {Object} The return description.
+ */
+async function resolveConflictsManually (error) {
+  return console.error(error);
 }
 /**
  * Summary.
@@ -137,7 +195,8 @@ async function fetch (url, options = {}) {
  * @returns {Object} The return description.
  */
 async function fetchDependency (metadata) {
-  const [content, error] = await fetch(`https://ipfs.io/ipfs/${metadata.hash}`);
+  const url = `https://ipfs.io/ipfs/${metadata.hash}`
+  const [content, error] = await IPromise(fetch(url));
   if (error) resolveConflictsManually(error);
   return content;
 }
@@ -163,9 +222,11 @@ function compatibility (metadata, tree) {
  * @returns {Object} The return description.
  */
 function resolve (metadata, tree) {
-  const dependency = tree.search(metadata);
+  const dependency = null; // tree.search(metadata);
+  // console.log(metadata);
+  // console.log(fetchDependency(metadata));
   if (!dependency) return [fetchDependency(metadata), []];
-  const conflicts = tree.compatibility(dependency);
+  // const conflicts = tree.compatibility(dependency);
   return [dependency, conflicts];
 }
 /**
@@ -206,12 +267,15 @@ function Tree (dependencies = []) {
  * @param {string} paramName - Param description (e.g. "add", "edit").
  * @returns {Object} The return description.
  */
-function Metadata (protocol, author, lib, version, hash) {
- this.protocol = protocol
- this.author = author
- this.lib = lib
- this.version = version
- this.hash = hash
+function Metadata (url, _import) {
+  const [protocol, author, lib, version, hash] = decode(url);
+  this.protocol = protocol;
+  this.author = author;
+  this.lib = lib;
+  this.version = version;
+  this.hash = hash;
+  this.import = _import;
+  return this;
 }
 /**
  * Summary.
