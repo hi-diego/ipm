@@ -58,10 +58,11 @@ function replaceEsmSyntax (content, metadata) {
  * @param {string} url      - The url to deconstruct.
  * @returns {array<string>} - The array of the url pieces.
  */
-async function compile (filename) {
-  var [content, error] = await IPromise(readFile(fileName));
-  if (error) return resolveConflictsManually(e);
-  content = replaceEsmSyntax(content);
+async function compile (fileName) {
+  var [content, error] = await IPromise(fs.readFile(fileName));
+  console.log(content.toString());
+  // if (error) return resolveConflictsManually(e);
+  // content = replaceEsmSyntax(content);
 }
 /**
  * Split the given url into its parts.
@@ -114,7 +115,7 @@ function ITry (action) {
  * @param {string} paramName - Param description (e.g. "add", "edit").
  * @returns {Object} The return description.
  */
-function fetch (url, options = {}) {
+async function fetch (url, options = {}) {
   return await IPromise(new Promise((res, rej) => {
     var data = '';
     http.get(url, options, response => {
@@ -234,10 +235,12 @@ function Dependency (metadata) {
  * @param {string} paramName - Param description (e.g. "add", "edit").
  * @returns {Object} The return description.
  */
-export const Dependency = {
+const ipm = {
   Tree: Tree,
   Metadata: Metadata,
   fetch: fetch,
   resolve: resolve,
   Import: Import
 }
+
+compile(process.argv[2]);
