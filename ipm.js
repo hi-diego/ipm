@@ -121,9 +121,11 @@ function exportedObjects (dependency) {
   // console.log(names);
   // const names = dependency.rawContent.replace(/export \{(\S|\s)*\};/g, '');
   const name = moduleName(dependency.metadata);
-  var code = dependency.rawContent.replace(/export/g, 'const ' + name + ' = ')
-    + `\nvar MODULE_${name} = function () { return ${name}; }\n`
-  // eval(code)
+  const content = dependency.rawContent.replace(/export/g, 'const ' + name + ' = ');
+  var code = `const MODULE_${name} = function () {\n${ content.split('\n').join('\r\n  ') }\nreturn ${name};\n}\n`
+    + `const ${name} = MODULE_${name}();\n`
+    + `const ${dependency.metadata.import.alias} = ${name}.${dependency.metadata.import.alias};`;
+  // eval(code);
   // console.log(MODULE_DiegoMeza_JsonToXml_1_0_0());
   return code;
 }
@@ -173,7 +175,7 @@ async function compile (fileName) {
   var code = content.toString();
   code = await replaceEsmSyntax(code);
   console.log(code);
-  // eval(code); // excec the dependency free code
+  eval(code); // excec the dependency free code
   return code;
 }
 /**
