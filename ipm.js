@@ -221,7 +221,7 @@ async function build (fileName) {
   const [bytes, error] = await Fulfill(fs.readFile(fileName));
   if (error) return resolveConflictsManually(error);
   const code = bytes.toString();
-  const dependency = new Dependency(codeToMetadata(code));
+  const dependency = new Dependency(code);
   // Tree dependency flatten and manual resolution.
   // const tree = await tree(dependency);
   // Tree dependency flatten and manual resolution.
@@ -382,8 +382,9 @@ function Tree (dependency, tree) {
  * @param {string} paramName - Param description (e.g. "add", "edit").
  * @returns {Object} The return description.
  */
-function Metadata (url, _import) {
-  const [protocol, author, lib, version, hash, cert] = decode(url);
+function Dependency (rawContent) {
+  const [protocol, author, lib, version, hash, cert] = decodeComment(codeToComment(rawContent));
+  this.rawContent = rawContent;
   this.protocol = protocol;
   this.author = author;
   this.lib = lib;
@@ -391,23 +392,10 @@ function Metadata (url, _import) {
   this.version = version;
   this.hash = hash;
   this.cert = cert;
-  this.import = _import;
-  return this;
-}
-/**
- * Summary.
- *
- * Description.
- *
- * @throws {Exception}
- * @param {string} paramName - Param description (e.g. "add", "edit").
- * @returns {Object} The return description.
- */
-function Dependency (metadata, rawContent) {
-  this.metadata = metadata
-  // this.fetch = fetch.bind(null, [this]);
-  this.rawContent = rawContent;
+  const _imports = imports(rawContent);
+  console.log(_imports);
   this.dependencies = [];
+  // this.fetch = fetch.bind(null, [this]);
   return this;
 }
 /**
