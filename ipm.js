@@ -56,6 +56,7 @@ function isImports(codeLine) {
  * @returns {Object} The return description.
  */
 function imports(code) {
+  console.log(code);
   return code.match(/import (.)*'/g);
 }
 /**
@@ -73,6 +74,18 @@ function importMetadata (importString) {
   const name = expression.split(' as ')[1] || alias;
   const url = pieces.pop();
   return { name, alias, url, raw };
+}
+/**
+ * Split the given url into its parts.
+ *
+ * @throws {Exception}
+ * @param {string} url      - The url to deconstruct.
+ * @returns {array<string>} - The array of the url pieces.
+ */
+function importToModule (importString) {
+  const { name, alias, url, raw } = importMetadata(importString);
+  const [protocol, author, lib, version, hash] = decode(url);
+  return new Module(null, [protocol, author, lib, version, hash]);
 }
 /**
  * Split the given url into its parts.
@@ -221,14 +234,14 @@ async function build (fileName) {
   const [bytes, error] = await Fulfill(fs.readFile(fileName));
   if (error) return resolveConflictsManually(error);
   const code = bytes.toString();
-  const dependency = new Dependency(code);
+  const dependency = new Module(code);
   // Tree dependency flatten and manual resolution.
   // const tree = await tree(dependency);
   // Tree dependency flatten and manual resolution.
   // const bundle = await make(tree);
   // eval(code); // excec the dependency free code
   // return bundle;
-  return dependency.metadata.import;
+  return dependency;
 }
 /**
  * Split the given url into its parts.
@@ -311,7 +324,7 @@ async function resolveConflictsManually (error) {
  * @param {string} paramName - Param description (e.g. "add", "edit").
  * @returns {Object} The return description.
  */
-async function fetchDependency (metadata) {
+async function fetchModule (metadata) {
   const url = `https://ipfs.io/ipfs/${metadata.hash}`
   const [content, error] = await Fulfill(fetch(url));
   if (error) resolveConflictsManually(error);
@@ -340,7 +353,7 @@ function compatibility (metadata, tree) {
  */
 async function resolve (metadata, tree) {
   const dependency = null; // tree.search(metadata);
-  if (!dependency) return [new Dependency(metadata, await fetchDependency(metadata)), []];
+  if (!dependency) return [new Module(metadata, await fetchModule(metadata)), []];
   const conflicts = tree.compatibility(dependency);
   return [dependency, conflicts];
 }
@@ -382,8 +395,10 @@ function Tree (dependency, tree) {
  * @param {string} paramName - Param description (e.g. "add", "edit").
  * @returns {Object} The return description.
  */
-function Dependency (rawContent) {
-  const [protocol, author, lib, version, hash, cert] = decodeComment(codeToComment(rawContent));
+function Module (rawContent = null, attrs = []) {
+  const [protocol, author, lib, version, hash, cert] = rawContent == null 
+    ? attrs
+    : decodeComment(codeToComment(rawContent));
   this.rawContent = rawContent;
   this.protocol = protocol;
   this.author = author;
@@ -392,9 +407,7 @@ function Dependency (rawContent) {
   this.version = version;
   this.hash = hash;
   this.cert = cert;
-  const _imports = imports(rawContent);
-  console.log(_imports);
-  this.dependencies = [];
+  this.dependencies = rawContent == null ? [] : imports(rawContent).map(i => importToModule(i));
   // this.fetch = fetch.bind(null, [this]);
   return this;
 }
@@ -409,7 +422,7 @@ function Dependency (rawContent) {
  */
 const ipm = {
   Tree: Tree,
-  Metadata: Metadata,
+  Module: Module,
   fetch: fetch,
   resolve: resolve,
   Import: Import
