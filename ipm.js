@@ -56,59 +56,7 @@ function isImports(codeLine) {
  * @returns {Object} The return description.
  */
 function imports(code) {
-  const lines = code.split('\n');
-  var i = 0;
-  const imports = [];
-  var line = lines[i];
-  while (!isImports(lines[i])) i++;
-  while (isImports(line)) {
-    imports.push(line);
-    i++;
-    line = lines[i];
-  }
-  return imports;
-}
-/**
- * Summary.
- *
- * Description.
- *
- * @throws {Exception}
- * @param {string} paramName - Param description (e.g. "add", "edit").
- * @returns {Object} The return description.
- */
- function read (content) {
-   return {
-      from: function (start) {
-        return {
-          to: function (end) {
-            return content.match(new RegExp(`${start}.*${end}`));
-          }
-        }
-      }
-   }
- }
-/**
- * Summary.
- *
- * Description.
- *
- * @throws {Exception}
- * @param {string} paramName - Param description (e.g. "add", "edit").
- * @returns {Object} The return description.
- */
-function fromTo(code) {
-  const lines = code.split('\n');
-  var i = 0;
-  const imports = [];
-  var line = lines[i];
-  while (!isImports(lines[i])) i++;
-  while (isImports(line)) {
-    imports.push(line);
-    i++;
-    line = lines[i];
-  }
-  return imports;
+  return code.match(/import (.)*'/g);
 }
 /**
  * Split the given url into its parts.
@@ -164,7 +112,7 @@ function moduleFunction (dependency) {
   return code;
 }
 /**
- * Split the given url into its parts.
+ * Split the given url into its 
  *
  * @throws {Exception}
  * @param {string} url      - The url to deconstruct.
@@ -187,8 +135,17 @@ async function replaceEsmSyntax (content, metadata) {
  * @returns {array<string>} - The array of the url pieces.
  */
 function codeToComment (code) {
-  const comment = code.match()
-  return comment;
+  return code.match(/\/\*\*(.|\n|\r\n)*\*\//g)[0];
+}
+/**
+ * Split the given url into its parts.
+ *
+ * @throws {Exception}
+ * @param {string} url      - The url to deconstruct.
+ * @returns {array<string>} - The array of the url pieces.
+ */
+function encode (author, name, version, license, cert, hash = '') {
+  return `ipfs/${author}/${name}/${version}/${hash}`;
 }
 /**
  * Split the given url into its parts.
@@ -198,8 +155,44 @@ function codeToComment (code) {
  * @returns {array<string>} - The array of the url pieces.
  */
 function codeToUrl (code) {
-  const url =  codeToComment();
-  return url;
+  const comment =  codeToComment(code);
+  return commentToUrl(comment);
+}
+/**
+ * Split the given url into its parts.
+ *
+ * @throws {Exception}
+ * @param {string} url      - The url to deconstruct.
+ * @returns {array<string>} - The array of the url pieces.
+ */
+function commentToUrl (comment) {
+  const [author, name, version, license, cert] = decodeComment(comment);
+  return encode(author, name, version, license, cert);
+}
+/**
+ * Split the given url into its parts.
+ *
+ * @throws {Exception}
+ * @param {string} url      - The url to deconstruct.
+ * @returns {array<string>} - The array of the url pieces.
+ */
+function decodeComment (comment) {
+  const authorRegex = /\* \@author (.+)(\n|\r\n)/g;
+  const authorResult = authorRegex.exec(comment);
+  const author = authorResult[1];
+  const nameRegex = /\* \@(name|lib|module) (.+)(\n|\r\n)/g;
+  const nameResult = nameRegex.exec(comment);
+  const name = nameResult[1];
+  const versionRegex = /\* \@version (.+)(\n|\r\n)/g;
+  const versionResult = versionRegex.exec(comment);
+  const version = versionResult[1];
+  const licenseRegex = /\* \@license (.+)(\n|\r\n)/g;
+  const licenseResult = licenseRegex.exec(comment);
+  const license = licenseResult[1];
+  const certRegex = /\* \@cert (.+)(\n|\r\n)/g;
+  const certResult = certRegex.exec(comment);
+  const cert = certResult[1];
+  return [author, name, version, license, '', cert];
 }
 /**
  * Split the given url into its parts.
@@ -209,7 +202,13 @@ function codeToUrl (code) {
  * @returns {array<string>} - The array of the url pieces.
  */
 function codeToMetadata (code) {
-  return new Metadata(codeToUrl(code));
+  try {
+    const _imports = imports(code).map(importMetadata);
+    return new Metadata(codeToUrl(code), _imports);
+  } catch (e) {
+    console.error('Modules must have the module definition comment at the start of the file.');
+    throw e;
+  }
 }
 /**
  * Split the given url into its parts.
@@ -223,10 +222,13 @@ async function build (fileName) {
   if (error) return resolveConflictsManually(error);
   const code = bytes.toString();
   const dependency = new Dependency(codeToMetadata(code));
-  // const bundle = await resolve(dependency);
-  const bundle = await dependency.resolve();
+  // Tree dependency flatten and manual resolution.
+  // const tree = await tree(dependency);
+  // Tree dependency flatten and manual resolution.
+  // const bundle = await make(tree);
   // eval(code); // excec the dependency free code
-  return bundle;
+  // return bundle;
+  return dependency.metadata.import;
 }
 /**
  * Split the given url into its parts.
@@ -366,9 +368,10 @@ async function Import (url, tree) {
  * @param {string} paramName - Param description (e.g. "add", "edit").
  * @returns {Object} The return description.
  */
-function Tree (dependencies = []) {
- this.dependencies = dependencies
- this.compatibility = compatibility;
+function Tree (dependency, tree) {
+  // Is leaf?
+  if (dependency.dependencies.length === 0) return tree;
+  return dependency.dependencies.forEach(d => Tree(d, tree));
 }
 /**
  * Summary.
@@ -380,13 +383,14 @@ function Tree (dependencies = []) {
  * @returns {Object} The return description.
  */
 function Metadata (url, _import) {
-  const [protocol, author, lib, version, hash] = decode(url);
+  const [protocol, author, lib, version, hash, cert] = decode(url);
   this.protocol = protocol;
   this.author = author;
   this.lib = lib;
   this.name = lib;
   this.version = version;
   this.hash = hash;
+  this.cert = cert;
   this.import = _import;
   return this;
 }
@@ -403,6 +407,7 @@ function Dependency (metadata, rawContent) {
   this.metadata = metadata
   // this.fetch = fetch.bind(null, [this]);
   this.rawContent = rawContent;
+  this.dependencies = [];
   return this;
 }
 /**
@@ -435,8 +440,8 @@ const text = `/**
    return {
       from: function (startToken) {
         return {`;
-console.log(read(text).from('/**').to('*/'));
+// console.log(read(text).from('/').to('{'));
 
 
-// const code = build(process.argv[2]);
-// code.then(console.log);
+const code = build(process.argv[2]);
+code.then(console.log);
