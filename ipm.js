@@ -69,6 +69,60 @@ function imports(code) {
   return imports;
 }
 /**
+ * Summary.
+ *
+ * Description.
+ *
+ * @throws {Exception}
+ * @param {string} paramName - Param description (e.g. "add", "edit").
+ * @returns {Object} The return description.
+ */
+ function read (content) {
+   return {
+      from: function (startToken) {
+        return {
+          to: function (endToken) {
+            var extracted = '';
+            var index = 0;
+            var token = content.substr(index, startToken.length);
+            while (token !== startToken) {
+              token = content.substr(++index, startToken.length);
+            } 
+            while (token !== endToken) {
+              console.log(token);
+              // delay(1000)
+              token = content.substr(++index, startToken.length);
+              extracted += token;
+            }
+            return extracted;
+          }
+        }
+      }
+   }
+ }
+/**
+ * Summary.
+ *
+ * Description.
+ *
+ * @throws {Exception}
+ * @param {string} paramName - Param description (e.g. "add", "edit").
+ * @returns {Object} The return description.
+ */
+function fromTo(code) {
+  const lines = code.split('\n');
+  var i = 0;
+  const imports = [];
+  var line = lines[i];
+  while (!isImports(lines[i])) i++;
+  while (isImports(line)) {
+    imports.push(line);
+    i++;
+    line = lines[i];
+  }
+  return imports;
+}
+/**
  * Split the given url into its parts.
  *
  * @throws {Exception}
@@ -144,13 +198,47 @@ async function replaceEsmSyntax (content, metadata) {
  * @param {string} url      - The url to deconstruct.
  * @returns {array<string>} - The array of the url pieces.
  */
-async function compile (fileName) {
-  var [content, error] = await IPromise(fs.readFile(fileName));
+function codeToComment (code) {
+  const comment = code.match()
+  return comment;
+}
+/**
+ * Split the given url into its parts.
+ *
+ * @throws {Exception}
+ * @param {string} url      - The url to deconstruct.
+ * @returns {array<string>} - The array of the url pieces.
+ */
+function codeToUrl (code) {
+  const url =  codeToComment();
+  return url;
+}
+/**
+ * Split the given url into its parts.
+ *
+ * @throws {Exception}
+ * @param {string} url      - The url to deconstruct.
+ * @returns {array<string>} - The array of the url pieces.
+ */
+function codeToMetadata (code) {
+  return new Metadata(codeToUrl(code));
+}
+/**
+ * Split the given url into its parts.
+ *
+ * @throws {Exception}
+ * @param {string} url      - The url to deconstruct.
+ * @returns {array<string>} - The array of the url pieces.
+ */
+async function build (fileName) {
+  const [bytes, error] = await Fulfill(fs.readFile(fileName));
   if (error) return resolveConflictsManually(error);
-  var code = content.toString();
-  code = await replaceEsmSyntax(code);
+  const code = bytes.toString();
+  const dependency = new Dependency(codeToMetadata(code));
+  // const bundle = await resolve(dependency);
+  const bundle = await dependency.resolve();
   // eval(code); // excec the dependency free code
-  return code;
+  return bundle;
 }
 /**
  * Split the given url into its parts.
@@ -171,11 +259,12 @@ function decode (url) {
  * @param {Promise} promise - Param description (e.g. "add", "edit").
  * @returns {array<object>} - Array containing in 0 the data of the promise or null, and in 1 the error or null.
  */
-async function IPromise (promise) {
+async function Fulfill (promise) {
   // return ITry(async () => await promise);
   try {
     return [await promise, null];
   } catch (e) {
+    // return resolveConflictsManually(error);
     return [null, e];
   }
 }
@@ -234,7 +323,7 @@ async function resolveConflictsManually (error) {
  */
 async function fetchDependency (metadata) {
   const url = `https://ipfs.io/ipfs/${metadata.hash}`
-  const [content, error] = await IPromise(fetch(url));
+  const [content, error] = await Fulfill(fetch(url));
   if (error) resolveConflictsManually(error);
   return content;
 }
@@ -345,5 +434,21 @@ const ipm = {
   Import: Import
 }
 
-const code = compile(process.argv[2]);
-code.then(console.log);
+const text = `/**
+ * Summary.
+ *
+ * Description.
+ *
+ * @throws {Exception}
+ * @param {string} paramName - Param description (e.g. "add", "edit").
+ * @returns {Object} The return description.
+ */
+ function read () {
+   return {
+      from: function (startToken) {
+        return {`;
+console.log(read(text).from('/**').to('*/'));
+
+
+// const code = build(process.argv[2]);
+// code.then(console.log);
