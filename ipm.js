@@ -60,7 +60,7 @@ function imports(code) {
   var i = 0;
   const imports = [];
   var line = lines[i];
-  if (!isImports(line)) return [];
+  while (!isImports(lines[i])) i++;
   while (isImports(line)) {
     imports.push(line);
     i++;
@@ -133,12 +133,9 @@ async function replaceEsmSyntax (content, metadata) {
   // if the file doesent have a dependency is a leaf
   // in the dependency tree so we can load it safely.
   if (_imports.length === 0) return content;
-  // 
   const promises = _imports.map(i => resolve(new Metadata(i.url, i)));
   const deps = (await Promise.all(promises)).map(pe => pe[0]);
-  _imports.forEach(i => replaceImport(i, content, code));
-  // recursive call replaceEsmSyntax(c.rawContent, c.metadata))
-  return deps.reduce((p, d) => content.replace(d.metadata.import.raw, moduleFunction(d), d.metadata),'');
+  return deps.reduce(async (p, d) => content.replace(d.metadata.import.raw, moduleFunction(d), d.metadata), ''); //
 }
 /**
  * Split the given url into its parts.
@@ -149,10 +146,10 @@ async function replaceEsmSyntax (content, metadata) {
  */
 async function compile (fileName) {
   var [content, error] = await IPromise(fs.readFile(fileName));
-  if (error) return resolveConflictsManually(e);
+  if (error) return resolveConflictsManually(error);
   var code = content.toString();
   code = await replaceEsmSyntax(code);
-  eval(code); // excec the dependency free code
+  // eval(code); // excec the dependency free code
   return code;
 }
 /**
@@ -263,7 +260,7 @@ function compatibility (metadata, tree) {
  * @returns {Object} The return description.
  */
 async function resolve (metadata, tree) {
-  const dependency = tree.search(metadata);
+  const dependency = null; // tree.search(metadata);
   if (!dependency) return [new Dependency(metadata, await fetchDependency(metadata)), []];
   const conflicts = tree.compatibility(dependency);
   return [dependency, conflicts];

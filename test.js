@@ -1,6 +1,6 @@
-import { IterationPath } from 'ipfs/DiegoMeza/JsonToXml/1.0.0/QmdeW5LqgBPaNpq36ZqciKFhWQi9zxecVk1oYhp1fScQ2R';
+import { ReadJsonFile } from 'ipfs/DiegoMeza/JsonToXmlServer/1.0.0/QmNg2xtkeTQamFCu1u6Fp3R4Vcww5VgzyjEBh2HmYDaRii';
 
 async function main () {
-    console.log(IterationPath('foo', 'bar'));
+  console.log(ReadJsonFile);
 }
 main();
