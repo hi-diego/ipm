@@ -79,22 +79,10 @@ function imports(code) {
  */
  function read (content) {
    return {
-      from: function (startToken) {
+      from: function (start) {
         return {
-          to: function (endToken) {
-            var extracted = '';
-            var index = 0;
-            var token = content.substr(index, startToken.length);
-            while (token !== startToken) {
-              token = content.substr(++index, startToken.length);
-            } 
-            while (token !== endToken) {
-              console.log(token);
-              // delay(1000)
-              token = content.substr(++index, startToken.length);
-              extracted += token;
-            }
-            return extracted;
+          to: function (end) {
+            return content.match(new RegExp(`${start}.*${end}`));
           }
         }
       }
