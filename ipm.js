@@ -56,7 +56,6 @@ function isImports(codeLine) {
  * @returns {Object} The return description.
  */
 function imports(code) {
-  console.log(code);
   return code.match(/import (.)*'/g);
 }
 /**
@@ -134,7 +133,7 @@ function moduleFunction (dependency) {
 async function replaceEsmSyntax (content, metadata) {
   const _imports = imports(content).map(importMetadata);
   // if the file doesent have a dependency is a leaf
-  // in the dependency tree so we can load it safely.
+  // in the dependency modules so we can load it safely.
   if (_imports.length === 0) return content;
   const promises = _imports.map(i => resolve(new Metadata(i.url, i)));
   const deps = (await Promise.all(promises)).map(pe => pe[0]);
@@ -179,8 +178,8 @@ function codeToUrl (code) {
  * @returns {array<string>} - The array of the url pieces.
  */
 function commentToUrl (comment) {
-  const [author, name, version, license, cert] = decodeComment(comment);
-  return encode(author, name, version, license, cert);
+  const [protocol, author, name, version, hash, license, cert] = decodeComment(comment);
+  return encode(protocol, author, name, version, hash, license, cert);
 }
 /**
  * Split the given url into its parts.
@@ -205,7 +204,7 @@ function decodeComment (comment) {
   const certRegex = /\* \@cert (.+)(\n|\r\n)/g;
   const certResult = certRegex.exec(comment);
   const cert = certResult[1];
-  return [author, name, version, license, '', cert];
+  return ['', author, name, version, license, '', cert];
 }
 /**
  * Split the given url into its parts.
@@ -222,26 +221,6 @@ function codeToMetadata (code) {
     console.error('Modules must have the module definition comment at the start of the file.');
     throw e;
   }
-}
-/**
- * Split the given url into its parts.
- *
- * @throws {Exception}
- * @param {string} url      - The url to deconstruct.
- * @returns {array<string>} - The array of the url pieces.
- */
-async function build (fileName) {
-  const [bytes, error] = await Fulfill(fs.readFile(fileName));
-  if (error) return resolveConflictsManually(error);
-  const code = bytes.toString();
-  const dependency = new Module(code);
-  // Tree dependency flatten and manual resolution.
-  // const tree = await tree(dependency);
-  // Tree dependency flatten and manual resolution.
-  // const bundle = await make(tree);
-  // eval(code); // excec the dependency free code
-  // return bundle;
-  return dependency;
 }
 /**
  * Split the given url into its parts.
@@ -298,7 +277,7 @@ function ITry (action) {
 function fetch (url) {
   return new Promise((res, rej) => {
     https.get(url, r => {
-      if (r.statusCode !== 200) return rej(new Error(`Request Failed. Status Code: ${r.statusCode}`));
+      if (r.statusCode !== 200) return rej(new Error(`Request Failed. Status Code: ${r.statusCode}\n${url}`));
       r.on('data', d => res(d.toString()));
     }).on('error', e => rej(e));
   });
@@ -324,8 +303,8 @@ async function resolveConflictsManually (error) {
  * @param {string} paramName - Param description (e.g. "add", "edit").
  * @returns {Object} The return description.
  */
-async function fetchModule (metadata) {
-  const url = `https://ipfs.io/ipfs/${metadata.hash}`
+async function fetchModule (dependency) {
+  const url = `https://ipfs.io/ipfs/${dependency.hash}`
   const [content, error] = await Fulfill(fetch(url));
   if (error) resolveConflictsManually(error);
   return content;
@@ -339,8 +318,32 @@ async function fetchModule (metadata) {
  * @param {string} paramName - Param description (e.g. "add", "edit").
  * @returns {Object} The return description.
  */
-function compatibility (metadata, tree) {
-  // if (tree.dep.fin())
+function compatibility (a, modules) {
+  const c = modules.find(b => broken(a, b));
+  return c 
+    ? `Broken dependencies: ${a.name} requires ${a.version} and ${c.name} ${c.version} is already installed`
+    : null;
+}
+/**
+ * Split the given url into its parts.
+ *
+ * @throws {Exception}
+ * @param {string} url      - The url to deconstruct.
+ * @returns {array<string>} - The array of the url pieces.
+ */
+async function build (fileName) {
+  const [bytes, error] = await Fulfill(fs.readFile(fileName));
+  if (error) return resolveConflictsManually(error);
+  const code = bytes.toString();
+  const dependency = new Module(code);
+  // ModuleBag dependency flatten and manual resolution.
+  const modules = [];
+  const conflicts = await resolve(dependency, modules);
+  // ModuleBag dependency flatten and manual resolution.
+  // const bundle = await make(modules);
+  // eval(code); // excec the dependency free code
+  // return bundle;
+  return modules;
 }
 /**
  * Summary.
@@ -351,11 +354,14 @@ function compatibility (metadata, tree) {
  * @param {string} paramName - Param description (e.g. "add", "edit").
  * @returns {Object} The return description.
  */
-async function resolve (metadata, tree) {
-  const dependency = null; // tree.search(metadata);
-  if (!dependency) return [new Module(metadata, await fetchModule(metadata)), []];
-  const conflicts = tree.compatibility(dependency);
-  return [dependency, conflicts];
+async function resolve (dependency, modules) {
+  const conflict = compatibility(dependency, modules);
+  if (conflict) return [conflict];
+  const already = modules.find(exact);
+  if (already) return [];
+  await dependency.fetch();
+  modules.push(dependency);
+  return await dependency.dependencies.map(d => resolve(d, modules));
 }
 /**
  * Summary.
@@ -366,9 +372,9 @@ async function resolve (metadata, tree) {
  * @param {string} paramName - Param description (e.g. "add", "edit").
  * @returns {Object} The return description.
  */
-async function Import (url, tree) {
+async function Import (url, modules) {
   const metadata = new Metadata(url);
-  const [dependency, conflicts] = await resolve(metadata, tree);
+  const [dependency, conflicts] = await resolve(metadata, modules);
   if (conflicts.length > 0) return resolveConflictsManually(conflicts);
   return dependency;
 }
@@ -381,10 +387,63 @@ async function Import (url, tree) {
  * @param {string} paramName - Param description (e.g. "add", "edit").
  * @returns {Object} The return description.
  */
-function Tree (dependency, tree) {
+function exact (a, b) {
+    return similar(a, b) && a.version !== b.version;
+}
+/**
+ * Summary.
+ *
+ * Description.
+ *
+ * @throws {Exception}
+ * @param {string} paramName - Param description (e.g. "add", "edit").
+ * @returns {Object} The return description.
+ */
+function similar (a, b) {
+    return a.name === b.name && a.author === b.author;
+}
+/**
+ * Summary.
+ *
+ * Description.
+ *
+ * @throws {Exception}
+ * @param {string} paramName - Param description (e.g. "add", "edit").
+ * @returns {Object} The return description.
+ */
+function broken (a, b) {
+  return similar(a, b) && a.version !== b.version;
+}
+/**
+ * Summary.
+ *
+ * Description.
+ *
+ * @throws {Exception}
+ * @param {string} paramName - Param description (e.g. "add", "edit").
+ * @returns {Object} The return description.
+ */
+function search (a, modules) {
+  return modules.dependencies.find(b => exact(a, b));
+  const already = modules.dependencies.find(b => exact(a, b));
+  if (already) return already;
+  return modules.dependencies.find(b => similar(a, b));
+}
+/**
+ * Summary.
+ *
+ * Description.
+ *
+ * @throws {Exception}
+ * @param {string} paramName - Param description (e.g. "add", "edit").
+ * @returns {Object} The return description.
+ */
+function ModuleBag (dependency, modules) {
+  this.dependencies = [dependency];
+  this.search = a => search(a, this.dependencies);
   // Is leaf?
-  if (dependency.dependencies.length === 0) return tree;
-  return dependency.dependencies.forEach(d => Tree(d, tree));
+  // if (dependency.dependencies.length === 0) return modules;
+  // return dependency.dependencies.forEach(d => ModuleBag(d, modules));
 }
 /**
  * Summary.
@@ -396,7 +455,7 @@ function Tree (dependency, tree) {
  * @returns {Object} The return description.
  */
 function Module (rawContent = null, attrs = []) {
-  const [protocol, author, lib, version, hash, cert] = rawContent == null 
+  const [protocol, author, lib, version, hash, license, cert] = rawContent == null 
     ? attrs
     : decodeComment(codeToComment(rawContent));
   this.rawContent = rawContent;
@@ -407,7 +466,13 @@ function Module (rawContent = null, attrs = []) {
   this.version = version;
   this.hash = hash;
   this.cert = cert;
-  this.dependencies = rawContent == null ? [] : imports(rawContent).map(i => importToModule(i));
+  this.dependencies = [];
+  this.isFetched = () => !!this.rawContent;
+  this.fetch = async () =>  {
+    this.rawContent = this.rawContent || await fetchModule(this);
+    this.dependencies = imports(rawContent).map(i => importToModule(i));
+    console.log(this.dependencies);
+  }
   // this.fetch = fetch.bind(null, [this]);
   return this;
 }
@@ -421,28 +486,11 @@ function Module (rawContent = null, attrs = []) {
  * @returns {Object} The return description.
  */
 const ipm = {
-  Tree: Tree,
+  ModuleBag: ModuleBag,
   Module: Module,
   fetch: fetch,
   resolve: resolve,
   Import: Import
 }
-
-const text = `/**
- * Summary.
- *
- * Description.
- *
- * @throws {Exception}
- * @param {string} paramName - Param description (e.g. "add", "edit").
- * @returns {Object} The return description.
- */
- function read () {
-   return {
-      from: function (startToken) {
-        return {`;
-// console.log(read(text).from('/').to('{'));
-
-
 const code = build(process.argv[2]);
 code.then(console.log);

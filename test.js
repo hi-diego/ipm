@@ -1,6 +1,6 @@
 /**
 * @author DiegoMeza
-* @name Test
+* @lib Test
 * @version 1.0.0
 * @license GPL-3
 * @cert R#@R#@
